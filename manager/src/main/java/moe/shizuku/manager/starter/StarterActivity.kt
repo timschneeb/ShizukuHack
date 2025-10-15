@@ -162,34 +162,10 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
             }
             postResult()
 
-            sb.appendLine("Copying out native lib")
-            postResult()
-
-//            File("${application.applicationInfo.nativeLibraryDir}/libmstring.so").copyTo(
-//                soDst
-//            )
-
-            postResult()
-
-            sb.appendLine("Sending data to TTS ${application.applicationInfo.nativeLibraryDir}/libmstring.so")
-            postResult()
-
-            val serviceIntent = Intent()
-            serviceIntent.component = ComponentName("com.samsung.SMT", "com.samsung.SMT.SamsungTTSService")
-            application.startService(serviceIntent)
-
-            delay(3000)
-
-            val intent = Intent("com.samsung.SMT.ACTION_INSTALL_FINISHED")
-            intent.putExtra("BROADCAST_CURRENT_LANGUAGE_INFO", ArrayList<CharSequence>())
-            intent.putExtra("SMT_ENGINE_VERSION", 361904052)
-            intent.putExtra("SMT_ENGINE_PATH", "${application.applicationInfo.nativeLibraryDir}/libmstring.so")
-            application.sendOrderedBroadcast(intent, null)
-
-            sb.appendLine("Sent data")
-            postResult()
-
-            sb.appendLine("info: shizuku_starter exit with 0")
+            val cmd =
+                """pm path moe.shizuku.privileged.api |  sed -E 's|/[^/]+\.apk$|/lib/arm64/libshizuku.so|'"""
+            sb.appendLine("note: please invoke '$cmd' manually")
+            // TODO: automate this with netcat
             postResult()
 
 //            Shell.su(Starter.dataCommand).to(object : CallbackList<String?>() {
