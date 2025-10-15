@@ -3,11 +3,12 @@ plugins {
 }
 
 android {
+    namespace 'rikka.shizuku.common'
     buildFeatures {
         buildConfig = false
     }
 }
 
 dependencies {
-    compileOnly 'dev.rikka.hidden:stub:3.2.0'
+    compileOnly libs.hidden.stub
 }

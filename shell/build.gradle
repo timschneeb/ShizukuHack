@@ -1,8 +1,10 @@
 plugins {
     id 'com.android.application'
+    id 'dev.rikka.tools.refine'
 }
 
 android {
+    namespace 'rikka.shizuku.shell'
     defaultConfig {
         versionCode rootProject.ext.versionCode
         versionName rootProject.ext.versionName
@@ -13,7 +15,7 @@ android {
         }
         release {
             minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            proguardFiles 'proguard-rules.pro'
         }
     }
     dependenciesInfo {
@@ -22,12 +24,13 @@ android {
     lint {
         checkReleaseBuilds false
     }
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 android.applicationVariants.all { variant ->
     variant.outputs.all {
-        outputFileName = "shizuku-v${versionName}.apk"
-
         def outDir = new File(rootDir, "out")
         def mappingPath = new File(outDir, "mapping").absolutePath
         def dexPath = "${rootProject.rootDir.path}/manager/src/main/assets"
@@ -55,5 +58,6 @@ android.applicationVariants.all { variant ->
 }
 
 dependencies {
-    compileOnly 'dev.rikka.hidden:stub:3.2.0'
+    implementation libs.hidden.compat
+    compileOnly libs.hidden.stub
 }

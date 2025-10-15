@@ -1,11 +1,14 @@
 package rikka.shizuku.server;
 
-import static rikka.shizuku.ShizukuApiConstants.ATTACH_REPLY_PERMISSION_GRANTED;
-import static rikka.shizuku.ShizukuApiConstants.ATTACH_REPLY_SERVER_PATCH_VERSION;
-import static rikka.shizuku.ShizukuApiConstants.ATTACH_REPLY_SERVER_SECONTEXT;
-import static rikka.shizuku.ShizukuApiConstants.ATTACH_REPLY_SERVER_UID;
-import static rikka.shizuku.ShizukuApiConstants.ATTACH_REPLY_SERVER_VERSION;
-import static rikka.shizuku.ShizukuApiConstants.ATTACH_REPLY_SHOULD_SHOW_REQUEST_PERMISSION_RATIONALE;
+import static android.Manifest.permission.WRITE_SECURE_SETTINGS;
+import static rikka.shizuku.ShizukuApiConstants.ATTACH_APPLICATION_API_VERSION;
+import static rikka.shizuku.ShizukuApiConstants.ATTACH_APPLICATION_PACKAGE_NAME;
+import static rikka.shizuku.ShizukuApiConstants.BIND_APPLICATION_PERMISSION_GRANTED;
+import static rikka.shizuku.ShizukuApiConstants.BIND_APPLICATION_SERVER_PATCH_VERSION;
+import static rikka.shizuku.ShizukuApiConstants.BIND_APPLICATION_SERVER_SECONTEXT;
+import static rikka.shizuku.ShizukuApiConstants.BIND_APPLICATION_SERVER_UID;
+import static rikka.shizuku.ShizukuApiConstants.BIND_APPLICATION_SERVER_VERSION;
+import static rikka.shizuku.ShizukuApiConstants.BIND_APPLICATION_SHOULD_SHOW_REQUEST_PERMISSION_RATIONALE;
 import static rikka.shizuku.ShizukuApiConstants.REQUEST_PERMISSION_REPLY_ALLOWED;
 import static rikka.shizuku.ShizukuApiConstants.REQUEST_PERMISSION_REPLY_IS_ONETIME;
 import static rikka.shizuku.server.ServerConstants.MANAGER_APPLICATION_ID;
@@ -27,6 +30,7 @@ import android.os.Looper;
 import android.os.Parcel;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -49,6 +53,7 @@ import rikka.parcelablelist.ParcelableListSlice;
 import rikka.rish.RishConfig;
 import rikka.shizuku.ShizukuApiConstants;
 import rikka.shizuku.server.api.IContentProviderUtils;
+import rikka.shizuku.server.util.HandlerUtil;
 import rikka.shizuku.server.util.UserHandleCompat;
 
 public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuClientManager, ShizukuConfigManager> {
@@ -57,7 +62,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 //        DdmHandleAppName.setAppName("shizuku_server", 0);
         RishConfig.setLibraryPath(System.getProperty("shizuku.library.path"));
 
-        Looper.prepare();
+        Looper.prepareMainLooper();
         new ShizukuService();
         Looper.loop();
     }
@@ -86,6 +91,8 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
     public ShizukuService() {
         super();
+
+        HandlerUtil.setMainHandler(mainHandler);
 
         LOGGER.i("starting server...");
 
@@ -177,10 +184,16 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     }
 
     @Override
-    public void attachApplication(IShizukuApplication application, String requestPackageName) {
-        if (application == null || requestPackageName == null) {
+    public void attachApplication(IShizukuApplication application, Bundle args) {
+        if (application == null || args == null) {
             return;
         }
+
+        String requestPackageName = args.getString(ATTACH_APPLICATION_PACKAGE_NAME);
+        if (requestPackageName == null) {
+            return;
+        }
+        int apiVersion = args.getInt(ATTACH_APPLICATION_API_VERSION, -1);
 
         int callingPid = Binder.getCallingPid();
         int callingUid = Binder.getCallingUid();
@@ -195,9 +208,9 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
         isManager = MANAGER_APPLICATION_ID.equals(requestPackageName);
 
-        if (!isManager && clientManager.findClient(callingUid, callingPid) == null) {
+        if (clientManager.findClient(callingUid, callingPid) == null) {
             synchronized (this) {
-                clientRecord = clientManager.addClient(callingUid, callingPid, application, requestPackageName);
+                clientRecord = clientManager.addClient(callingUid, callingPid, application, requestPackageName, apiVersion);
             }
             if (clientRecord == null) {
                 LOGGER.w("Add client failed");
@@ -207,14 +220,30 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
         LOGGER.d("attachApplication: %s %d %d", requestPackageName, callingUid, callingPid);
 
+        int replyServerVersion = ShizukuApiConstants.SERVER_VERSION;
+        if (apiVersion == -1) {
+            // ShizukuBinderWrapper has adapted API v13 in dev.rikka.shizuku:api 12.2.0, however
+            // attachApplication in 12.2.0 is still old, so that server treat the client as pre 13.
+            // This finally cause transactRemote fails.
+            // So we can pass 12 here to pretend we are v12 server.
+            replyServerVersion = 12;
+        }
+
         Bundle reply = new Bundle();
-        reply.putInt(ATTACH_REPLY_SERVER_UID, OsUtils.getUid());
-        reply.putInt(ATTACH_REPLY_SERVER_VERSION, ShizukuApiConstants.SERVER_VERSION);
-        reply.putString(ATTACH_REPLY_SERVER_SECONTEXT, OsUtils.getSELinuxContext());
-        reply.putInt(ATTACH_REPLY_SERVER_PATCH_VERSION, ServerConstants.PATCH_VERSION);
+        reply.putInt(BIND_APPLICATION_SERVER_UID, OsUtils.getUid());
+        reply.putInt(BIND_APPLICATION_SERVER_VERSION, replyServerVersion);
+        reply.putString(BIND_APPLICATION_SERVER_SECONTEXT, OsUtils.getSELinuxContext());
+        reply.putInt(BIND_APPLICATION_SERVER_PATCH_VERSION, ShizukuApiConstants.SERVER_PATCH_VERSION);
         if (!isManager) {
-            reply.putBoolean(ATTACH_REPLY_PERMISSION_GRANTED, clientRecord.allowed);
-            reply.putBoolean(ATTACH_REPLY_SHOULD_SHOW_REQUEST_PERMISSION_RATIONALE, false);
+            reply.putBoolean(BIND_APPLICATION_PERMISSION_GRANTED, Objects.requireNonNull(clientRecord).allowed);
+            reply.putBoolean(BIND_APPLICATION_SHOULD_SHOW_REQUEST_PERMISSION_RATIONALE, false);
+        } else {
+            try {
+                PermissionManagerApis.grantRuntimePermission(MANAGER_APPLICATION_ID,
+                        WRITE_SECURE_SETTINGS, UserHandleCompat.getUserId(callingUid));
+            } catch (RemoteException e) {
+                LOGGER.w(e, "grant WRITE_SECURE_SETTINGS");
+            }
         }
         try {
             application.bindApplication(reply);
@@ -295,6 +324,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     continue;
                 }
 
+                int deviceId = 0;//Context.DEVICE_ID_DEFAULT
                 if (allowed) {
                     PermissionManagerApis.grantRuntimePermission(packageName, PERMISSION, userId);
                 } else {
@@ -304,7 +334,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
         }
     }
 
-    private int getFlagsForUidInternal(int uid, int mask, boolean allowRuntimePermission) {
+    private int  getFlagsForUidInternal(int uid, int mask, boolean allowRuntimePermission) {
         ShizukuConfig.PackageEntry entry = configManager.find(uid);
         if (entry != null) {
             return entry.flags & mask;
@@ -369,6 +399,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                     continue;
                 }
 
+                int deviceId = 0;//Context.DEVICE_ID_DEFAULT
                 if (allowed) {
                     PermissionManagerApis.grantRuntimePermission(packageName, PERMISSION, userId);
                 } else {
@@ -474,6 +505,10 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
     }
 
     static void sendBinderToUserApp(Binder binder, String packageName, int userId) {
+        sendBinderToUserApp(binder, packageName, userId, true);
+    }
+
+    static void sendBinderToUserApp(Binder binder, String packageName, int userId, boolean retry) {
         try {
             DeviceIdleControllerApis.addPowerSaveTempWhitelistApp(packageName, 30 * 1000, userId,
                     316/* PowerExemptionManager#REASON_SHELL */, "shell");
@@ -502,6 +537,23 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             if (provider == null) {
                 LOGGER.e("provider is null %s %d", name, userId);
                 return;
+            }
+            if (!provider.asBinder().pingBinder()) {
+                LOGGER.e("provider is dead %s %d", name, userId);
+
+                if (retry) {
+                    // For unknown reason, sometimes this could happens
+                    // Kill Shizuku app and try again could work
+                    ActivityManagerApis.forceStopPackageNoThrow(packageName, userId);
+                    LOGGER.e("kill %s in user %d and try again", packageName, userId);
+                    Thread.sleep(1000);
+                    sendBinderToUserApp(binder, packageName, userId, false);
+                }
+                return;
+            }
+
+            if (!retry) {
+                LOGGER.e("retry works");
             }
 
             Bundle extra = new Bundle();

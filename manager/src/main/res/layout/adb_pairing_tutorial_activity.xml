@@ -51,6 +51,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/adb_pairing_tutorial_content_notification"
+                    android:textAppearance="?textAppearanceBodyMedium"
                     android:textColor="?colorOnSecondaryContainer" />
 
             </LinearLayout>
@@ -87,6 +88,7 @@
                     android:layout_height="wrap_content"
                     android:lineSpacingExtra="2sp"
                     android:text="@string/adb_pairing_tutorial_content_notification_blocked"
+                    android:textAppearance="?textAppearanceBodyMedium"
                     android:textColor="?colorOnErrorContainer" />
 
                 <com.google.android.material.button.MaterialButton
@@ -98,6 +100,8 @@
                     android:text="@string/notification_settings"
                     android:textColor="?colorOnError"
                     app:backgroundTint="?colorError"
+                    app:iconTint="?colorOnError"
+                    app:iconTintMode="src_in"
                     app:icon="@drawable/ic_outline_open_in_new_24"
                     app:iconPadding="16dp" />
 
@@ -144,6 +148,7 @@
                     android:layout_height="wrap_content"
                     android:duplicateParentState="true"
                     android:text="@string/adb_pairing_tutorial_content_network"
+                    android:textAppearance="?textAppearanceBodyMedium"
                     android:textColor="?colorOnSecondaryContainer" />
 
                 <TextView
@@ -154,6 +159,7 @@
                     android:duplicateParentState="true"
                     android:fontFamily="sans-serif-medium"
                     android:text="@string/adb_pairing_tutorial_content_network_limation_not_foreground"
+                    android:textAppearance="?textAppearanceBodyMedium"
                     android:textColor="?colorOnSecondaryContainer" />
 
             </LinearLayout>
@@ -191,6 +197,7 @@
                     android:layout_height="wrap_content"
                     android:duplicateParentState="true"
                     android:text="@string/adb_pairing_tutorial_content_miui"
+                    android:textAppearance="?textAppearanceBodyMedium"
                     android:textColor="?colorOnErrorContainer" />
 
                 <TextView
@@ -201,6 +208,7 @@
                     android:duplicateParentState="true"
                     android:fontFamily="sans-serif-medium"
                     android:text="@string/adb_pairing_tutorial_content_miui_2"
+                    android:textAppearance="?textAppearanceBodyMedium"
                     android:textColor="?colorOnErrorContainer" />
 
             </LinearLayout>

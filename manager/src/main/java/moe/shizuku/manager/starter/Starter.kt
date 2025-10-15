@@ -1,5 +1,7 @@
 package moe.shizuku.manager.starter
 
+import moe.shizuku.manager.application
+import java.io.File
 import android.content.Context
 import android.os.Build
 import android.os.UserManager
@@ -21,6 +23,17 @@ import java.util.zip.ZipFile
 
 object Starter {
 
+    /* TODO: from new shizuku */
+    private val starterFile = File(application.applicationInfo.nativeLibraryDir, "libshizuku.so")
+
+    val userCommand: String = starterFile.absolutePath
+
+    val adbCommand = "adb shell $userCommand"
+
+    val internalCommand = "$userCommand --apk=${application.applicationInfo.sourceDir}"
+
+
+    /* TODO: from old shizuku */
     private var commandInternal = arrayOfNulls<String>(2)
 
     val dataCommand get() = commandInternal[0]!!

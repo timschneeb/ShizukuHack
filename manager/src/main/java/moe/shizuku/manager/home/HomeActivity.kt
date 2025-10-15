@@ -18,7 +18,6 @@ import moe.shizuku.manager.databinding.HomeActivityBinding
 import moe.shizuku.manager.ktx.toHtml
 import moe.shizuku.manager.management.appsViewModel
 import moe.shizuku.manager.settings.SettingsActivity
-import moe.shizuku.manager.starter.Starter
 import moe.shizuku.manager.utils.AppIconCache
 import rikka.core.ktx.unsafeLazy
 import rikka.lifecycle.Status
@@ -48,8 +47,6 @@ abstract class HomeActivity : AppBarActivity() {
 
         val binding = HomeActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        Starter.writeSdcardFilesAsync(this)
 
         homeModel.serviceStatus.observe(this) {
             if (it.status == Status.SUCCESS) {
@@ -140,4 +137,5 @@ abstract class HomeActivity : AppBarActivity() {
             else -> super.onOptionsItemSelected(item)
         }
     }
+
 }

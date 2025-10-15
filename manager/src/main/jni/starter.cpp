@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
+#include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <ctime>
@@ -8,18 +9,15 @@
 #include <sys/stat.h>
 #include <sys/system_properties.h>
 #include <cerrno>
-#include <string_view>
+#include <string>
 #include <termios.h>
-#include <experimental/string>
 #include <sys/wait.h>
-#include <asm-generic/fcntl.h>
 #include <fstream>
 #include "android.h"
 #include "misc.h"
 #include "selinux.h"
 #include "cgroup.h"
 #include "logging.h"
-#include <fcntl.h>
 
 #ifdef DEBUG
 #define JAVA_DEBUGGABLE
@@ -40,7 +38,7 @@
 #define SERVER_CLASS_PATH "rikka.shizuku.server.ShizukuService"
 
 #if defined(__arm__)
-#define ABI "armeabi-v7a"
+#define ABI "arm"
 #elif defined(__i386__)
 #define ABI "x86"
 #elif defined(__x86_64__)
@@ -60,13 +58,13 @@ static void run_server(const char *dex_path, const char *main_class, const char 
     size_t v_size = 0; \
     uintptr_t v_current = 0;
 #define ARG_PUSH(v, arg) v_size += sizeof(char *); \
-if ((v) == nullptr) { \
-    (v) = (char **) malloc(v_size); \
+if (v == nullptr) { \
+    v = (char **) malloc(v_size); \
 } else { \
-    (v) = (char **) realloc(v, v_size);\
+    v = (char **) realloc(v, v_size);\
 } \
-v_current = (uintptr_t) (v) + v_size - sizeof(char *); \
-*((char **) v_current) = (arg) ? strdup(arg) : nullptr;
+v_current = (uintptr_t) v + v_size - sizeof(char *); \
+*((char **) v_current) = arg ? strdup(arg) : nullptr;
 
 #define ARG_END(v) ARG_PUSH(v, nullptr)
 
@@ -76,12 +74,12 @@ v_current = (uintptr_t) (v) + v_size - sizeof(char *); \
 #ifdef JAVA_DEBUGGABLE
 #define ARG_PUSH_DEBUG_ONLY(v, arg) ARG_PUSH(v, arg)
 #define ARG_PUSH_DEBUG_VM_PARAMS(v) \
-    if (android::GetApiLevel() >= 30) { \
+    if (android_get_device_api_level() >= 30) { \
         ARG_PUSH(v, "-Xcompiler-option"); \
         ARG_PUSH(v, "--debuggable"); \
         ARG_PUSH(v, "-XjdwpProvider:adbconnection"); \
         ARG_PUSH(v, "-XjdwpOptions:suspend=n,server=y"); \
-    } else if (android::GetApiLevel() >= 28) { \
+    } else if (android_get_device_api_level() >= 28) { \
         ARG_PUSH(v, "-Xcompiler-option"); \
         ARG_PUSH(v, "--debuggable"); \
         ARG_PUSH(v, "-XjdwpProvider:internal"); \
@@ -121,12 +119,30 @@ v_current = (uintptr_t) (v) + v_size - sizeof(char *); \
 }
 
 static void start_server(const char *path, const char *main_class, const char *process_name) {
-    if (daemon(false, false) == 0) {
-        LOGD("child");
-        run_server(path, main_class, process_name);
-    } else {
-        perrorf("fatal: can't fork\n");
-        exit(EXIT_FATAL_FORK);
+    pid_t pid = fork();
+    switch (pid) {
+        case -1: {
+            perrorf("fatal: can't fork\n");
+            exit(EXIT_FATAL_FORK);
+        }
+        case 0: {
+            LOGD("child");
+            setsid();
+            chdir("/");
+            int fd = open("/dev/null", O_RDWR);
+            if (fd != -1) {
+                dup2(fd, STDIN_FILENO);
+                dup2(fd, STDOUT_FILENO);
+                dup2(fd, STDERR_FILENO);
+                if (fd > 2) close(fd);
+            }
+            run_server(path, main_class, process_name);
+        }
+        default: {
+            printf("info: shizuku_server pid is %d\n", pid);
+            printf("info: shizuku_starter exit with 0\n");
+            exit(EXIT_SUCCESS);
+        }
     }
 }
 
@@ -144,39 +160,36 @@ static int check_selinux(const char *s, const char *t, const char *c, const char
 }
 
 static int switch_cgroup() {
-    int s_cuid, s_cpid;
-    int spid = getpid();
-
-    if (cgroup::get_cgroup(spid, &s_cuid, &s_cpid) != 0) {
-        printf("warn: can't read cgroup\n");
-        fflush(stdout);
-        return -1;
-    }
-
-    printf("info: cgroup is /uid_%d/pid_%d\n", s_cuid, s_cpid);
-    fflush(stdout);
-
-    if (cgroup::switch_cgroup(spid, -1, -1) != 0) {
-        printf("warn: can't switch cgroup\n");
-        fflush(stdout);
-        return -1;
-    }
-
-    if (cgroup::get_cgroup(spid, &s_cuid, &s_cpid) != 0) {
-        printf("info: switch cgroup succeeded\n");
-        fflush(stdout);
+    int pid = getpid();
+    if (cgroup::switch_cgroup("/acct", pid)) {
+        printf("info: switch cgroup succeeded, cgroup in /acct\n");
         return 0;
     }
-
-    printf("warn: can't switch self, current cgroup is /uid_%d/pid_%d\n", s_cuid, s_cpid);
+    if (cgroup::switch_cgroup("/dev/cg2_bpf", pid)) {
+        printf("info: switch cgroup succeeded, cgroup in /dev/cg2_bpf\n");
+        return 0;
+    }
+    if (cgroup::switch_cgroup("/sys/fs/cgroup", pid)) {
+        printf("info: switch cgroup succeeded, cgroup in /sys/fs/cgroup\n");
+        return 0;
+    }
+    char buf[PROP_VALUE_MAX + 1];
+    if (__system_property_get("ro.config.per_app_memcg", buf) > 0 &&
+        strncmp(buf, "false", 5) != 0) {
+        if (cgroup::switch_cgroup("/dev/memcg/apps", pid)) {
+            printf("info: switch cgroup succeeded, cgroup in /dev/memcg/apps\n");
+            return 0;
+        }
+    }
+    printf("warn: can't switch cgroup\n");
     fflush(stdout);
     return -1;
 }
 
-char *context = nullptr;
+
 
 int starter_main(int argc, char *argv[]) {
-    char *apk_path = nullptr;
+    std::string apk_path;
     for (int i = 0; i < argc; ++i) {
         if (strncmp(argv[i], "--apk=", 6) == 0) {
             apk_path = argv[i] + 6;
@@ -185,7 +198,7 @@ int starter_main(int argc, char *argv[]) {
 
     LOGE("%i", getuid());
 
-    int uid = getuid();
+    uid_t uid = getuid();
     if (uid != 0 && uid != 2000 && uid != 1000) {
         perrorf("fatal: run Shizuku from non root nor adb user (uid=%d).\n", uid);
         exit(EXIT_FATAL_UID);
@@ -194,22 +207,16 @@ int starter_main(int argc, char *argv[]) {
     se::init();
 
     if (uid == 0) {
-        chown("/data/local/tmp/shizuku_starter", 2000, 2000);
-        se::setfilecon("/data/local/tmp/shizuku_starter", "u:object_r:shell_data_file:s0");
         switch_cgroup();
 
-        int sdkLevel = 0;
-        char buf[PROP_VALUE_MAX + 1];
-        if (__system_property_get("ro.build.version.sdk", buf) > 0)
-            sdkLevel = atoi(buf);
-
-        if (sdkLevel >= 29) {
+        if (android_get_device_api_level() >= 29) {
             printf("info: switching mount namespace to init...\n");
             switch_mnt_ns(1);
         }
     }
 
     if (uid == 0) {
+        char *context = nullptr;
         if (se::getcon(&context) == 0) {
             int res = 0;
 
@@ -225,19 +232,10 @@ int starter_main(int argc, char *argv[]) {
         }
     }
 
-    mkdir("/data/local/tmp/shizuku", 0707);
-    chmod("/data/local/tmp/shizuku", 0707);
-    if (uid == 0) {
-        chown("/data/local/tmp/shizuku", 2000, 2000);
-        se::setfilecon("/data/local/tmp/shizuku", "u:object_r:shell_data_file:s0");
-    }
-
-    LOGE("starter begin");
     printf("info: starter begin\n");
     fflush(stdout);
 
     // kill old server
-    LOGE("killing old process");
     printf("info: killing old process...\n");
     fflush(stdout);
 
@@ -247,8 +245,7 @@ int starter_main(int argc, char *argv[]) {
         char name[1024];
         if (get_proc_name(pid, name, 1024) != 0) return;
 
-        if (strcmp(SERVER_NAME, name) != 0
-            && strcmp("shizuku_server_legacy", name) != 0)
+        if (strcmp(SERVER_NAME, name) != 0)
             return;
 
         if (kill(pid, SIGKILL) == 0)
@@ -261,12 +258,12 @@ int starter_main(int argc, char *argv[]) {
         }
     });
 
-    if (access(apk_path, R_OK) == 0) {
+    if (access(apk_path.c_str(), R_OK) == 0) {
         printf("info: use apk path from argv\n");
         fflush(stdout);
     }
 
-    if (!apk_path) {
+    if (apk_path.empty()) {
         auto f = popen("pm path " PACKAGE_NAME, "r");
         if (f) {
             char line[PATH_MAX]{0};
@@ -279,29 +276,26 @@ int starter_main(int argc, char *argv[]) {
         }
     }
 
-    if (!apk_path) {
+    if (apk_path.empty()) {
         perrorf("fatal: can't get path of manager\n");
         exit(EXIT_FATAL_PM_PATH);
     }
 
-    LOGE("got apk path %s", apk_path);
-    printf("info: apk path is %s\n", apk_path);
-    if (access(apk_path, R_OK) != 0) {
-        perrorf("fatal: can't access manager %s\n", apk_path);
+    printf("info: apk path is %s\n", apk_path.c_str());
+    if (access(apk_path.c_str(), R_OK) != 0) {
+        perrorf("fatal: can't access manager %s\n", apk_path.c_str());
         exit(EXIT_FATAL_PM_PATH);
     }
 
     printf("info: starting server...\n");
     fflush(stdout);
     LOGD("start_server");
-    start_server(apk_path, SERVER_CLASS_PATH, SERVER_NAME);
+    start_server(apk_path.c_str(), SERVER_CLASS_PATH, SERVER_NAME);
     exit(EXIT_SUCCESS);
 }
 
-using main_func = int (*)(int, char *[]);
-
-static main_func applet_main[] = {starter_main, nullptr};
-
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "ConstantParameter"
 static int fork_daemon(int returnParent) {
     pid_t child = fork();
     if (child == 0) { // 1st child
@@ -342,9 +336,10 @@ static int fork_daemon(int returnParent) {
     if (!returnParent) exit(EXIT_SUCCESS);
     return 1; // success parent
 }
+#pragma clang diagnostic pop
 
 int sleep_ms(int ms) {
-    struct timespec ts;
+    struct timespec ts{};
     ts.tv_sec = ms / 1000;
     ts.tv_nsec = (ms % 1000) * 1000000;
     if ((nanosleep(&ts,&ts) == -1) && (errno == EINTR)) {
@@ -356,17 +351,7 @@ int sleep_ms(int ms) {
 }
 
 int main(int argc, char **argv) {
-    std::string_view base = basename(argv[0]);
-
-    LOGD("applet %s", base.data());
-
-    constexpr const char *applet_names[] = {"shizuku_starter", nullptr, "libshizuku.so"};
-
-//    for (int i = 0; applet_names[i]; ++i) {
-//        if (base == applet_names[i]) {
-//            return (*applet_main[i])(argc, argv);
-//        }
-//    }
+    LOGD("applet launched");
 
     if (fork_daemon(0) == 0) {
         LOGD("Daemonized");
@@ -375,8 +360,6 @@ int main(int argc, char **argv) {
             sleep_ms(16);
         }
     }
-
-    return 1;
 
     return 1;
 }

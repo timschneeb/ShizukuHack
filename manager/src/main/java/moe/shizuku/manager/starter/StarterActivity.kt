@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.system.Os
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -13,7 +14,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.AppConstants.EXTRA
-import moe.shizuku.manager.BuildConfig
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.adb.AdbClient
@@ -60,7 +60,7 @@ class StarterActivity : AppBarActivity() {
                 viewModel.appendOutput("")
                 viewModel.appendOutput("Waiting for service...")
 
-                Shizuku.addBinderReceivedListenerSticky(object : Shizuku.OnBinderReceivedListener {
+                Shizuku.addBinderReceivedListener(object : Shizuku.OnBinderReceivedListener {
                     override fun onBinderReceived() {
                         Shizuku.removeBinderReceivedListener(this)
                         viewModel.appendOutput("Service started, this window will be automatically closed in 3 seconds")
@@ -116,7 +116,6 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
     init {
         try {
             if (root) {
-                //Starter.writeFiles(context)
                 startRoot()
             } else {
                 startAdb(host!!, port)
@@ -143,17 +142,17 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
         postResult()
 
         GlobalScope.launch(Dispatchers.IO) {
-//            if (!Shell.rootAccess()) {
-//                Shell.getCachedShell()?.close()
-//                sb.append('\n').append("Can't open root shell, try again...").append('\n')
-//
-//                postResult()
-//                if (!Shell.rootAccess()) {
-//                    sb.append('\n').append("Still not :(").append('\n')
-//                    postResult(NotRootedException())
-//                    return@launch
-//                }
-//            }
+            /*if (!Shell.getShell().isRoot) {
+                Shell.getCachedShell()?.close()
+                sb.append('\n').append("Can't open root shell, try again...").append('\n')
+
+                postResult()
+                if (!Shell.getShell().isRoot) {
+                    sb.append('\n').append("Still not :(").append('\n')
+                    postResult(NotRootedException())
+                    return@launch
+                }
+            }*/
 
             val starter = Starter.writeDataFiles(application, true) ?: run {
                 sb.appendLine("Unable to write files")
@@ -168,22 +167,22 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
             // TODO: automate this with netcat
             postResult()
 
-//            Shell.su(Starter.dataCommand).to(object : CallbackList<String?>() {
-//                override fun onAddElement(s: String?) {
-//                    sb.append(s).append('\n')
-//                    postResult()
-//                }
-//            }).submit {
-//                if (it.code != 0) {
-//                    sb.append('\n').append("Send this to developer may help solve the problem.")
-//                    postResult()
-//                }
-//            }
+            /*Shell.cmd(Starter.internalCommand).to(object : CallbackList<String?>() {
+                override fun onAddElement(s: String?) {
+                    sb.append(s).append('\n')
+                    postResult()
+                }
+            }).submit {
+                if (it.code != 0) {
+                    sb.append('\n').append("Send this to developer may help solve the problem.")
+                    postResult()
+                }
+            }*/
         }
     }
 
     private fun startAdb(host: String, port: Int) {
-        sb.append("Starting with wireless adb...").append('\n').append('\n')
+        sb.append("Starting with wireless adb in port $port...").append('\n').append('\n')
         postResult()
 
         GlobalScope.launch(Dispatchers.IO) {
@@ -191,7 +190,7 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
                 AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku")
             } catch (e: Throwable) {
                 e.printStackTrace()
-                sb.append('\n').append(e.toString())
+                sb.append('\n').append(Log.getStackTraceString(e))
 
                 postResult(AdbKeyException(e))
                 return@launch
@@ -199,7 +198,7 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
 
             AdbClient(host, port, key).runCatching {
                 connect()
-                shellCommand(Starter.sdcardCommand) {
+                shellCommand(Starter.internalCommand) {
                     sb.append(String(it))
                     postResult()
                 }
@@ -207,36 +206,8 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
             }.onFailure {
                 it.printStackTrace()
 
-                sb.append('\n').append(it.toString())
+                sb.append('\n').append(Log.getStackTraceString(it))
                 postResult(it)
-            }
-
-            /* Adb on MIUI Android 11 has no permission to access Android/data.
-               Before MIUI Android 12, we can temporarily use /data/user_de.
-               After that, is better to implement "adb push" and push files directly to /data/local/tmp.
-             */
-            if (sb.contains("/Android/data/${BuildConfig.APPLICATION_ID}/start.sh: Permission denied")) {
-                sb.append('\n')
-                    .appendLine("adb have no permission to access Android/data, how could this possible ?!")
-                    .appendLine("try /data/user_de instead...")
-                    .appendLine()
-                postResult()
-
-                Starter.writeDataFiles(application, true)
-
-                AdbClient(host, port, key).runCatching {
-                    connect()
-                    shellCommand(Starter.dataCommand) {
-                        sb.append(String(it))
-                        postResult()
-                    }
-                    close()
-                }.onFailure {
-                    it.printStackTrace()
-
-                    sb.append('\n').append(it.toString())
-                    postResult(it)
-                }
             }
         }
     }

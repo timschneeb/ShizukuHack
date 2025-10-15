@@ -4,12 +4,10 @@ import android.annotation.TargetApi
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -51,12 +49,11 @@ class AdbPairingService : Service() {
         }
     }
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val port = MutableLiveData<Int>()
     private var adbMdns: AdbMdns? = null
 
     private val observer = Observer<Int> { port ->
         Log.i(tag, "Pairing service port: $port")
+        if (port <= 0) return@Observer
 
         // Since the service could be killed before user finishing input,
         // we need to put the port into Intent
@@ -98,20 +95,22 @@ class AdbPairingService : Service() {
             }
             stopAction -> {
                 stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
                 null
             }
             else -> {
-                return START_REDELIVER_INTENT
+                return START_NOT_STICKY
             }
         }
         if (notification != null) {
             try {
-                startForeground(notificationId, notification)
+                startForeground(notificationId, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
             } catch (e: Throwable) {
+                Log.e(tag, "startForeground failed", e)
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     && e is ForegroundServiceStartNotAllowedException) {
-
-                    Log.e(tag, "startForeground failed", e)
                     getSystemService(NotificationManager::class.java).notify(notificationId, notification)
                 }
             }
@@ -122,25 +121,13 @@ class AdbPairingService : Service() {
     private fun startSearch() {
         if (started) return
         started = true
-        adbMdns = AdbMdns(this, AdbMdns.TLS_PAIRING, port).apply { start() }
-
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            port.observeForever(observer)
-        } else {
-            handler.post { port.observeForever(observer) }
-        }
+        adbMdns = AdbMdns(this, AdbMdns.TLS_PAIRING, observer).apply { start() }
     }
 
     private fun stopSearch() {
         if (!started) return
         started = false
         adbMdns?.stop()
-
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            port.removeObserver(observer)
-        } else {
-            handler.post { port.removeObserver(observer) }
-        }
     }
 
     override fun onDestroy() {
@@ -228,6 +215,7 @@ class AdbPairingService : Service() {
                 }*/
                 .build()
         )
+        stopSelf()
     }
 
     private val stopNotificationAction by unsafeLazy {
@@ -293,16 +281,10 @@ class AdbPairingService : Service() {
             .build()
     }
 
-    private val searchingNotification by unsafeLazy {
-        Notification.Builder(this, notificationChannel)
-            .setColor(getColor(R.color.notification))
-            .setSmallIcon(R.drawable.ic_system_icon)
-            .setContentTitle(getString(R.string.notification_adb_pairing_searching_for_service_title))
-            .addAction(stopNotificationAction)
-            .build()
-    }
+    private fun replyNotificationAction(port: Int): Notification.Action {
+        // Ensure pending intent is created
+        val action = replyNotificationAction
 
-    private fun createInputNotification(port: Int): Notification {
         PendingIntent.getForegroundService(
             this,
             replyRequestId,
@@ -313,11 +295,24 @@ class AdbPairingService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        return action
+    }
+
+    private val searchingNotification by unsafeLazy {
+        Notification.Builder(this, notificationChannel)
+            .setColor(getColor(R.color.notification))
+            .setSmallIcon(R.drawable.ic_system_icon)
+            .setContentTitle(getString(R.string.notification_adb_pairing_searching_for_service_title))
+            .addAction(stopNotificationAction)
+            .build()
+    }
+
+    private fun createInputNotification(port: Int): Notification {
         return Notification.Builder(this, notificationChannel)
             .setColor(getColor(R.color.notification))
             .setContentTitle(getString(R.string.notification_adb_pairing_service_found_title))
             .setSmallIcon(R.drawable.ic_system_icon)
-            .addAction(replyNotificationAction)
+            .addAction(replyNotificationAction(port))
             .build()
     }
 
