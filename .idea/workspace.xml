@@ -9,18 +9,9 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b77f5d88-1f6d-4971-98f0-352c54443a55" name="Changes" comment="Get shell working as system">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="b77f5d88-1f6d-4971-98f0-352c54443a55" name="Changes" comment="Generalize for simple reverse shells">
       <change beforePath="$PROJECT_DIR$/api" beforeDir="false" afterPath="$PROJECT_DIR$/api" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/api/src/main/java/rikka/shizuku/ShizukuBinderWrapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/api/api/src/main/java/rikka/shizuku/ShizukuBinderWrapper.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/local.properties" beforeDir="false" afterPath="$PROJECT_DIR$/local.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/manager/src/main/assets/rish_shizuku.dex" beforeDir="false" afterPath="$PROJECT_DIR$/manager/src/main/assets/rish_shizuku.dex" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/manager/src/main/java/moe/shizuku/manager/starter/StarterActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/manager/src/main/java/moe/shizuku/manager/starter/StarterActivity.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/manager/src/main/jni/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/manager/src/main/jni/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/manager/src/main/jni/mstring.cpp" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -43,6 +34,7 @@
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/api" />
+    <option name="RESET_MODE" value="HARD" />
     <option name="ROOT_SYNC" value="DONT_SYNC" />
   </component>
   <component name="MarkdownSettingsMigration">
@@ -278,27 +270,64 @@
       <option name="project" value="LOCAL" />
       <updated>1665198028364</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Generalize for simple reverse shells">
+      <option name="closed" value="true" />
+      <created>1760543658530</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1760543658530</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="master" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
     <option name="TAB_STATES">
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="master" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
           </value>
         </entry>
       </map>
     </option>
   </component>
   <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
     <MESSAGE value="Priv esc hack" />
     <MESSAGE value="Update constants" />
     <MESSAGE value="Back to normal package name" />
     <MESSAGE value="Remove extraneous files" />
     <MESSAGE value="Work on shell functionality" />
     <MESSAGE value="Get shell working as system" />
-    <option name="LAST_COMMIT_MESSAGE" value="Get shell working as system" />
+    <MESSAGE value="Generalize for simple reverse shells" />
+    <option name="LAST_COMMIT_MESSAGE" value="Generalize for simple reverse shells" />
   </component>
 </project>
