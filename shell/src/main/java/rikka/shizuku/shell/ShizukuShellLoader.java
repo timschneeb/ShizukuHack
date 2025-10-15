@@ -103,7 +103,7 @@ public class ShizukuShellLoader {
         if (!TextUtils.isEmpty(systemLibrarySearchPath)) {
             librarySearchPath += File.pathSeparatorChar + systemLibrarySearchPath;
         }
-        librarySearchPath += File.pathSeparatorChar + sourceDir.replace("/base.apk", "") + "/lib/" + trimmedAbi;
+        librarySearchPath += File.pathSeparatorChar + sourceDir.replace("/base.apk", "") + "/lib/" + VMRuntimeHidden.getRuntime().vmInstructionSet();
 
         try {
             var classLoader = new BaseDexClassLoader(sourceDir, null, librarySearchPath, ClassLoader.getSystemClassLoader());

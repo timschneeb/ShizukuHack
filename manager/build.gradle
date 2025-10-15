@@ -49,6 +49,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "21"
+        freeCompilerArgs = ['-XXLanguage:+MultiDollarInterpolation']
     }
     packagingOptions {
         jniLibs {

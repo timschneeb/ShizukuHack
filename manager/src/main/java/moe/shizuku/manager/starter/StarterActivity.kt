@@ -154,15 +154,8 @@ private class ViewModel(context: Context, root: Boolean, host: String?, port: In
                 }
             }*/
 
-            val starter = Starter.writeDataFiles(application, true) ?: run {
-                sb.appendLine("Unable to write files")
-                postResult()
-                return@launch
-            }
-            postResult()
 
-            val cmd =
-                """pm path moe.shizuku.privileged.api |  sed -E 's|/[^/]+\.apk$|/lib/arm64/libshizuku.so|'"""
+            val cmd = $$"""STARTER=$(pm path moe.shizuku.privileged.api | sed -E 's|^package:(.*/)[^/]+\.apk$|\1lib/arm64/libshizuku.so|') && $STARTER"""
             sb.appendLine("note: please invoke '$cmd' manually")
             // TODO: automate this with netcat
             postResult()
